@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Доступные мероприятия</h2>
+
+{% if error %}
+<div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+    {{ error }}
+</div>
+{% endif %}
+
+{% if events %}
+    {% for event in events %}
+    <div class="card">
+        <h3>{{ event.title }}</h3>
+        <p><strong>Дата:</strong> {{ event.start_at[:16]|replace('T', ' ') if event.start_at else 'Не указана' }}</p>
+        <p><strong>Место:</strong> {{ event.location }}</p>
+        <p><strong>Преподаватель:</strong> {{ event.created_by.username if event.created_by else 'Неизвестен' }}</p>
+        <p><strong>Максимум участников:</strong> {{ event.max_participants }}</p>
+        <p style="color: #666;">{{ event.description[:100] if event.description else 'Описание отсутствует' }}</p>
+        
+        {% set is_registered = false %}
+        {% for reg in my_registrations %}
+            {% if reg.event == event.id %}
+                {% set is_registered = true %}
+            {% endif %}
+        {% endfor %}
+        
+        {% if is_registered %}
+            <p style="color: green;">✅ Вы уже зарегистрированы на это мероприятие</p>
+        {% else %}
+            <form method="POST" action="/student/register-by-qr/{{ event.id }}">
+                <input type="text" name="qr_token" placeholder="Введите QR-код" required>
+                <button type="submit">Зарегистрироваться по QR</button>
+            </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <p style="text-align: center;">Нет доступных мероприятий</p>
+    </div>
+{% endif %}
+
+<div style="display: flex; gap: 10px; margin-top: 20px;">
+    <button type="button" onclick="location.href='/student/my-registrations'">📋 Мои регистрации</button>
+    <button type="button" onclick="location.href='/logout'" style="background: #8B5F5F;">Выйти</button>
+</div>
+
+{% endblock %}

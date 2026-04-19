@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+    <h2>Все мероприятия</h2>
+    <div style="display: flex; gap: 10px;">
+        <button type="button" onclick="location.href='/admin/rating'" style="background: #FF9800; width: auto;">🏆 Рейтинг студентов</button>
+        <button type="button" onclick="location.href='/admin/create-teacher'" style="background: #4CAF50; width: auto;">👨‍🏫 Создать преподавателя</button>
+    </div>
+</div>
+
+<!-- Поиск -->
+<div class="card">
+    <form method="GET" action="/admin/events" style="display: flex; gap: 10px;">
+        <input type="text" name="search" placeholder="Поиск по названию..." value="{{ search_query }}" style="flex: 1;">
+        <button type="submit" style="width: auto;">🔍 Найти</button>
+        {% if search_query %}
+        <button type="button" onclick="location.href='/admin/events'" style="width: auto; background: #8B9A7B;">Сбросить</button>
+        {% endif %}
+    </form>
+</div>
+
+{% if events %}
+    {% for event in events %}
+    <div class="card">
+        <h3>{{ event.title }}</h3>
+        <p><strong>Преподаватель:</strong> {{ event.created_by.username if event.created_by else 'Неизвестен' }}</p>
+        <p><strong>Дата:</strong> {{ event.start_at[:16]|replace('T', ' ') if event.start_at else 'Не указана' }}</p>
+        <p><strong>Место:</strong> {{ event.location }}</p>
+        <p><strong>Максимум участников:</strong> {{ event.max_participants }}</p>
+        <p style="color: #666;">{{ event.description[:100] if event.description else 'Описание отсутствует' }}</p>
+        <button type="button" onclick="location.href='/admin/event/{{ event.id }}'">Подробнее</button>
+    </div>
+    {% endfor %}
+    
+    <!-- Пагинация -->
+    {% if total_pages > 1 %}
+    <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+        {% if current_page > 1 %}
+        <button type="button" onclick="location.href='?page={{ current_page - 1 }}{% if search_query %}&search={{ search_query }}{% endif %}'" style="width: auto;">← Предыдущая</button>
+        {% endif %}
+        
+        <span style="padding: 8px 16px; background: #5F6F52; color: white; border-radius: 14px;">
+            Страница {{ current_page }} из {{ total_pages }}
+        </span>
+        
+        {% if current_page < total_pages %}
+        <button type="button" onclick="location.href='?page={{ current_page + 1 }}{% if search_query %}&search={{ search_query }}{% endif %}'" style="width: auto;">Следующая →</button>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+{% else %}
+    <div class="card">
+        <p style="text-align: center;">Мероприятий не найдено</p>
+    </div>
+{% endif %}
+
+{% endblock %}

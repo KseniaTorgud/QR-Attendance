@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Все регистрации</h2>
+
+{% if registrations %}
+    <div class="card">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <th style="text-align: left; padding: 8px;">Студент</th>
+                    <th style="text-align: left; padding: 8px;">Мероприятие</th>
+                    <th style="text-align: left; padding: 8px;">Статус</th>
+                    <th style="text-align: left; padding: 8px;">Дата регистрации</th>
+                </table>
+            </thead>
+            <tbody>
+                {% for reg in registrations %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px;">{{ reg.student_username }}</td>
+                    <td style="padding: 8px;">{{ reg.event_title }}</td>
+                    <td style="padding: 8px;">
+                        {% if reg.attendance_status == 'confirmed' %}
+                            ✅ Подтверждено
+                        {% elif reg.attendance_status == 'rejected' %}
+                            ❌ Отклонено
+                        {% else %}
+                            ⏳ На рассмотрении
+                        {% endif %}
+                    </td>
+                    <td style="padding: 8px;">{{ reg.registered_at[:16]|replace('T', ' ') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="card">
+        <p style="text-align: center;">Нет регистраций</p>
+    </div>
+{% endif %}
+
+<button onclick="location.href='/admin/events'">← Назад к мероприятиям</button>
+<button onclick="location.href='/logout'" style="background: #8B5F5F;">Выйти</button>
+
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Мои посещения</h2>
+
+<form method="POST" action="/student/my" style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 10px;">
+        <input type="text" name="student_name" placeholder="Ваше имя" required style="flex: 1;">
+        <input type="text" name="student_group" placeholder="Группа" required style="flex: 1;">
+        <button type="submit" style="width: auto; padding: 12px 24px;">Найти</button>
+    </div>
+</form>
+
+{% if visits is not none %}
+    {% if visits %}
+        {% for visit in visits %}
+        <div class="card">
+            <h3>{{ visit.title }}</h3>
+            <p>📅 {{ visit.event_date.strftime('%d.%m.%Y %H:%M') }}</p>
+            <p>✅ Отметился: {{ visit.attended_at.strftime('%d.%m.%Y %H:%M:%S') }}</p>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="card">
+            <p style="text-align: center;">Мероприятий не найдено</p>
+        </div>
+    {% endif %}
+{% endif %}
+
+<button onclick="location.href='/'">← На главную</button>
+
+{% endblock %}

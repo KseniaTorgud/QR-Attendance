@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>QR-код для мероприятия</h2>
+
+<div class="card" style="text-align:center;">
+    <h3>{{ event.title }}</h3>
+    
+    {% if qr_image %}
+        <img src="{{ url_for('static', filename=qr_image) }}" alt="QR Code" style="max-width: 250px; margin: 20px auto;">
+        <p style="color: #666;">Отсканируйте QR-код камерой телефона</p>
+        <p style="font-size: 12px; color: #999;">Или перейдите по ссылке:</p>
+        <code style="word-break: break-all;">{{ qr_url }}</code>
+    {% else %}
+        <p style="color: #999;">QR-код ещё не сгенерирован</p>
+        <form method="POST" action="/teacher/generate_qr/{{ event.id }}">
+            <button type="submit">Сгенерировать QR-код</button>
+        </form>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Ссылка для отметки</h3>
+    <code style="word-break: break-all;">{{ qr_url }}</code>
+    <button onclick="navigator.clipboard.writeText('{{ qr_url }}')" style="margin-top: 10px;">📋 Скопировать ссылку</button>
+</div>
+
+<button onclick="location.href='/teacher/event/{{ event.id }}'">← Вернуться к мероприятию</button>
+
+{% endblock %}

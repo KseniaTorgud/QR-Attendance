@@ -1,0 +1,128 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Мои мероприятия</h2>
+
+{% if events %}
+    {% for event in events %}
+    <div class="card">
+        <div class="flex-between">
+            <h3>{{ event.title }}</h3>
+            <button type="button" class="qr-preview-btn" onclick="toggleQR('{{ event.id }}')" style="background: none; width: auto; padding: 5px;">
+                {% if event.qr_code_path %}
+                    📱 QR
+                {% else %}
+                    🔲 Создать QR
+                {% endif %}
+            </button>
+        </div>
+        
+        <p><strong>Дата:</strong> {{ event.start_at[:16]|replace('T', ' ') if event.start_at else 'Не указана' }}</p>
+        <p><strong>Место:</strong> {{ event.location }}</p>
+        <p><strong>Максимум участников:</strong> {{ event.max_participants }}</p>
+        <p style="color: #666;">{{ event.description[:100] if event.description else 'Описание отсутствует' }}{% if event.description and event.description|length > 100 %}...{% endif %}</p>
+        
+        <div class="card-actions">
+            <button type="button" onclick="location.href='/teacher/event/{{ event.id }}'">Открыть</button>
+        </div>
+        
+        <!-- Блок для QR-кода (скрыт по умолчанию) -->
+        <div id="qr-{{ event.id }}" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; text-align: center;">
+            <div class="qr-container">
+                <div id="qr-loading-{{ event.id }}" style="display: none; padding: 20px;">
+                    ⏳ Генерация QR-кода...
+                </div>
+                <img id="qr-img-{{ event.id }}" src="" alt="QR Code" style="max-width: 150px; margin: 10px auto; display: none;">
+                <p id="qr-text-{{ event.id }}" style="font-size: 12px; color: #666;"></p>
+                <button type="button" onclick="hideQR('{{ event.id }}')" style="background: #8B9A7B; width: auto; padding: 5px 15px;">Скрыть</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Скрытые данные о QR-пути -->
+    <input type="hidden" id="qr-path-{{ event.id }}" value="{{ event.qr_code_path if event.qr_code_path else '' }}">
+    
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <p style="text-align: center;">У вас пока нет мероприятий</p>
+    </div>
+{% endif %}
+
+<button type="button" onclick="location.href='/teacher/create'">➕ Создать мероприятие</button>
+
+<script>
+function toggleQR(eventId) {
+    var qrBlock = document.getElementById('qr-' + eventId);
+    var qrImg = document.getElementById('qr-img-' + eventId);
+    var qrLoading = document.getElementById('qr-loading-' + eventId);
+    var qrText = document.getElementById('qr-text-' + eventId);
+    var existingQrPath = document.getElementById('qr-path-' + eventId).value;
+    
+    // Если блок уже виден — скрываем
+    if (qrBlock.style.display === 'block') {
+        hideQR(eventId);
+        return;
+    }
+    
+    // Показываем блок
+    qrBlock.style.display = 'block';
+    
+    // Если QR уже существует — показываем его
+    if (existingQrPath && existingQrPath !== '') {
+        qrImg.src = '/static/' + existingQrPath + '?t=' + new Date().getTime();
+        qrImg.style.display = 'block';
+        qrText.innerHTML = 'Отсканируйте QR-код для отметки';
+        qrLoading.style.display = 'none';
+    } else {
+        // Генерируем новый QR
+        qrImg.style.display = 'none';
+        qrLoading.style.display = 'block';
+        qrText.innerHTML = 'Генерация...';
+        
+        fetch('/teacher/generate_qr_ajax/' + eventId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(data) {
+            qrLoading.style.display = 'none';
+            if (data.success) {
+                qrImg.src = '/static/' + data.qr_path + '?t=' + new Date().getTime();
+                qrImg.style.display = 'block';
+                qrText.innerHTML = 'Отсканируйте QR-код для отметки';
+                
+                // Обновляем скрытое поле
+                document.getElementById('qr-path-' + eventId).value = data.qr_path;
+                
+                // Меняем текст кнопки на 📱 QR
+                var btn = document.querySelector('#qr-' + eventId).closest('.card').querySelector('.qr-preview-btn');
+                if (btn) {
+                    btn.innerHTML = '📱 QR';
+                }
+            } else {
+                qrText.innerHTML = '❌ Ошибка: ' + data.error;
+                qrText.style.color = 'red';
+            }
+        })
+        .catch(function(error) {
+            qrLoading.style.display = 'none';
+            qrText.innerHTML = '❌ Ошибка при генерации: ' + error;
+            qrText.style.color = 'red';
+        });
+    }
+}
+
+function hideQR(eventId) {
+    var qrBlock = document.getElementById('qr-' + eventId);
+    if (qrBlock) {
+        qrBlock.style.display = 'none';
+    }
+}
+</script>
+
+{% endblock %}

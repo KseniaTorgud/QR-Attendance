@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card">
+    <h2>Вход в систему</h2>
+    
+    {% if error %}
+    <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    <form method="POST" action="/login">
+        <input type="text" name="username" placeholder="Имя пользователя" required>
+        <input type="password" name="password" placeholder="Пароль" required>
+        <button type="submit">Войти</button>
+    </form>
+    
+    <hr style="margin: 20px 0;">
+    
+    <p style="text-align: center; color: #666;">Нет аккаунта?</p>
+    <button onclick="location.href='/student/register'" style="background: #A0B49E;">Зарегистрироваться как студент</button>
+    
+    <hr style="margin: 20px 0;">
+    
+    <!--<p style="text-align: center; color: #666;">Преподаватель?</p>
+    <button onclick="location.href='/admin/create-teacher'" style="background: #8B9A7B;">Зарегистрировать преподавателя (админ)</button>-->
+</div>
+
+{% endblock %}

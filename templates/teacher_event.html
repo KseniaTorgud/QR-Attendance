@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card">
+    <h2>{{ event.title if event else 'Мероприятие не найдено' }}</h2>
+    
+    {% if event %}
+        <p><strong>Дата:</strong> {{ event.start_at[:16]|replace('T', ' ') if event.start_at else 'Не указана' }}</p>
+        <p><strong>Место:</strong> {{ event.location }}</p>
+        <p><strong>Максимум участников:</strong> {{ event.max_participants }}</p>
+        <p><strong>Описание:</strong> {{ event.description if event.description else 'Описание отсутствует' }}</p>
+    {% else %}
+        <p style="color: red;">Мероприятие не найдено</p>
+    {% endif %}
+</div>
+
+{% if event %}
+<div class="card">
+    <h3>Статистика</h3>
+    <p>📊 Всего зарегистрировалось: {{ registrations|length }} человек</p>
+</div>
+
+<div class="card">
+    <h3>Зарегистрированные студенты</h3>
+    
+    {% if registrations %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <th style="text-align: left; padding: 8px;">Студент</th>
+                    <th style="text-align: left; padding: 8px;">Группа</th>
+                    <th style="text-align: left; padding: 8px;">Фото</th>
+                    <th style="text-align: left; padding: 8px;">Время регистрации</th>
+                    <th style="text-align: left; padding: 8px;">Присутствие</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reg in registrations %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px;">{{ reg.student_username if reg.student_username else reg.student_name if reg.student_name else 'Неизвестно' }}</td>
+                    <td style="padding: 8px;">{{ reg.student_group if reg.student_group else '—' }}</td>
+                    <td style="padding: 8px;">
+                        {% if reg.selfie %}
+                            <a href="{{ reg.selfie }}" target="_blank">
+                                <img src="{{ reg.selfie }}" alt="Фото" style="width: 50px; height: 50px; object-fit: cover; border-radius: 50%; cursor: pointer;">
+                            </a>
+                        {% else %}
+                            <span style="color: gray;">Нет фото</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 8px;">{{ reg.registered_at[:16]|replace('T', ' ') if reg.registered_at else 'Не указано' }}</td>
+                    <td style="padding: 8px;">
+                        {% if reg.attendance_marked_by_student %}
+                            <span style="color: green;">✅ Отмечен</span>
+                        {% else %}
+                            <span style="color: orange;">⏳ Ожидает отметки</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="text-align: center; color: #666;">Пока никто не зарегистрировался</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div style="display: flex; gap: 10px; margin-top: 20px;">
+    <button type="button" onclick="location.href='/teacher/edit/{{ event.id }}'" style="background: #2196F3;">✏️ Редактировать</button>
+    <button type="button" onclick="deleteEvent('{{ event.id }}')" style="background: #f44336;">🗑️ Удалить мероприятие</button>
+    <button type="button" onclick="location.href='/teacher/events'">← Назад к списку</button>
+    <button type="button" onclick="location.href='/teacher/qr/{{ event.id }}'">📱 QR-код</button>
+</div>
+
+<script>
+function deleteEvent(eventId) {
+    if (confirm('Вы уверены, что хотите удалить это мероприятие? Это действие нельзя отменить.')) {
+        fetch('/teacher/delete/' + eventId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.success) {
+                location.href = '/teacher/events';
+            } else {
+                alert('Ошибка: ' + data.error);
+            }
+        })
+        .catch(function(error) {
+            alert('Ошибка при удалении: ' + error);
+        });
+    }
+}
+</script>
+
+{% endblock %}

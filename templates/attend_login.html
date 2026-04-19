@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card">
+    <h2>Для отметки на мероприятии нужно войти</h2>
+    
+    {% if error %}
+    <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    <form method="POST" action="/attend_login">
+        <input type="text" name="username" placeholder="Имя пользователя" required>
+        <input type="password" name="password" placeholder="Пароль" required>
+        <button type="submit">Войти</button>
+    </form>
+    
+    <hr style="margin: 20px 0;">
+    
+    <p style="text-align: center;">Нет аккаунта?</p>
+    <button onclick="location.href='/student/register'" style="background: #A0B49E;">Зарегистрироваться</button>
+</div>
+
+{% endblock %}

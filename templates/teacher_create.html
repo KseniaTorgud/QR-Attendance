@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card">
+    <h2>Создать мероприятие</h2>
+
+    <form method="POST" action="/teacher/create">
+        <input type="text" name="title" placeholder="Название" required>
+        <input type="datetime-local" name="start_at" required>
+        <input type="datetime-local" name="registration_deadline" required>
+        <input type="text" name="location" placeholder="Место проведения" required>
+        <input type="number" name="max_participants" placeholder="Максимум участников" value="50" required>
+        <textarea name="description" placeholder="Описание" rows="4"></textarea>
+        <button type="submit">Создать мероприятие</button>
+    </form>
+</div>
+
+{% endblock %}

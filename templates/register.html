@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card">
+    <h2>Регистрация преподавателя</h2>
+    
+    {% if error %}
+    <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    <form method="POST" action="/register">
+        <input type="text" name="name" placeholder="ФИО" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="password" name="password" placeholder="Пароль" required>
+        <input type="password" name="confirm_password" placeholder="Подтвердите пароль" required>
+        <button type="submit">Зарегистрироваться</button>
+    </form>
+    
+    <hr style="margin: 20px 0;">
+    
+    <p style="text-align: center;">Уже есть аккаунт?</p>
+    <button onclick="location.href='/'" style="background: #8B9A7B;">Войти</button>
+</div>
+
+{% endblock %}

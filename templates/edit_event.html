@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+
+{% if session.role == 'admin' %}
+    {% set back_url = '/admin/event/' + event.id|string %}
+{% else %}
+    {% set back_url = '/teacher/event/' + event.id|string %}
+{% endif %}
+
+{% block content %}
+
+<div class="card">
+    <h2>Редактирование мероприятия</h2>
+    
+    {% if error %}
+    <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    <form method="POST" action="/teacher/edit/{{ event.id }}">
+        <input type="text" name="title" placeholder="Название" value="{{ event.title }}" required>
+        <input type="datetime-local" name="start_at" value="{{ event.start_at[:16] if event.start_at else '' }}" required>
+        <input type="datetime-local" name="registration_deadline" value="{{ event.registration_deadline[:16] if event.registration_deadline else '' }}" required>
+        <input type="text" name="location" placeholder="Место проведения" value="{{ event.location }}" required>
+        <input type="number" name="max_participants" placeholder="Максимум участников" value="{{ event.max_participants }}" required>
+        <textarea name="description" placeholder="Описание" rows="4">{{ event.description if event.description else '' }}</textarea>
+        
+        <select name="status" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #ddd; margin-top: 10px;">
+            <option value="registration_open" {% if event.status == 'registration_open' %}selected{% endif %}>Открыта регистрация</option>
+            <option value="confirmation_required" {% if event.status == 'confirmation_required' %}selected{% endif %}>Требуется подтверждение</option>
+            <option value="finished" {% if event.status == 'finished' %}selected{% endif %}>Завершено</option>
+        </select>
+        
+        <button type="submit">Сохранить изменения</button>
+    </form>
+</div>
+<button type="button" onclick="location.href='{{ back_url }}'">← Назад</button>
+{% endblock %}

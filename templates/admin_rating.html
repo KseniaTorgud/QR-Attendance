@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Рейтинг студентов</h2>
+
+{% if rating %}
+    <div class="card">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <th style="text-align: left; padding: 8px;">Место</th>
+                    <th style="text-align: left; padding: 8px;">Студент</th>
+                    <th style="text-align: left; padding: 8px;">Имя</th>
+                    <th style="text-align: left; padding: 8px;">Фамилия</th>
+                    <th style="text-align: left; padding: 8px;">Посещено мероприятий</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in rating %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px;">{{ loop.index }}</td>
+                    <td style="padding: 8px;">{{ student.username }}</td>
+                    <td style="padding: 8px;">{{ student.first_name }}</td>
+                    <td style="padding: 8px;">{{ student.last_name }}</td>
+                    <td style="padding: 8px;"><strong>{{ student.confirmed_visits }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="card">
+        <p style="text-align: center;">Нет данных для рейтинга</p>
+    </div>
+{% endif %}
+
+<div style="display: flex; gap: 10px; margin-top: 20px;">
+    <button type="button" onclick="location.href='/admin/events'">← Назад к мероприятиям</button>
+    <button type="button" onclick="location.href='/admin/create-teacher'" style="background: #4CAF50;">👨‍🏫 Создать преподавателя</button>
+</div>
+
+{% endblock %}

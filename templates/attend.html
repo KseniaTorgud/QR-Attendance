@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card">
+    <h2>Отметка на мероприятии</h2>
+    <h3>{{ event.title }}</h3>
+    <p><strong>Дата:</strong> {{ event.start_at[:16]|replace('T', ' ') if event.start_at else 'Не указана' }}</p>
+    <p><strong>Место:</strong> {{ event.location }}</p>
+    
+    {% if error %}
+    <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    {% if already_registered %}
+        <p style="color: green;">✅ Вы уже зарегистрированы на это мероприятие!</p>
+        <button onclick="location.href='/student/my-registrations'">Мои регистрации</button>
+    {% else %}
+        <form method="POST" action="/attend/{{ event.id }}" enctype="multipart/form-data">
+            <input type="text" name="student_name" placeholder="Ваше имя" required>
+            <input type="text" name="student_group" placeholder="Группа" required>
+            <input type="file" name="selfie" accept="image/*" capture="environment">
+            <p style="font-size: 12px; color: #666;">Сделайте селфи на мероприятии (необязательно)</p>
+            <button type="submit">Отметиться</button>
+        </form>
+    {% endif %}
+</div>
+
+<button onclick="location.href='/'">На главную</button>
+
+{% endblock %}

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>{% if title %}{{ title }}{% else %}QR Attendance{% endif %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="header" style="display: flex; justify-content: space-between; align-items: center;">
+    <span>QR Attendance</span>
+    <button onclick="location.href='/'" style="width: auto; padding: 8px 16px; background: #8B9A7B;">
+        🏠 На главную
+    </button>
+</header>
+
+<div class="container">
+    {% block content %}{% endblock %}
+</div>
+
+</body>
+</html>

@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card" style="text-align: center;">
+    <h2>✅ Вы отмечены!</h2>
+    <p>Вы успешно зарегистрировались на мероприятие:</p>
+    <h3>{{ event.title }}</h3>
+    <p><strong>Дата:</strong> {{ event.start_at[:16]|replace('T', ' ') if event.start_at else 'Не указана' }}</p>
+    <p><strong>Место:</strong> {{ event.location }}</p>
+    
+    <button onclick="location.href='/student/my-registrations'">Мои регистрации</button>
+    <button onclick="location.href='/'">На главную</button>
+</div>
+
+{% endblock %}

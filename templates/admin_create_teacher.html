@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card">
+    <h2>Создать аккаунт преподавателя</h2>
+    
+    {% if error %}
+    <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    {% if success %}
+    <div style="background: #e8f5e9; color: #2e7d32; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        {{ success }}
+    </div>
+    {% endif %}
+    
+    <form method="POST" action="/admin/create-teacher">
+        <input type="text" name="username" placeholder="Имя пользователя (логин)" required>
+        <input type="password" name="password" placeholder="Пароль" required>
+        <input type="text" name="first_name" placeholder="Имя" required>
+        <input type="text" name="last_name" placeholder="Фамилия" required>
+        <input type="email" name="email" placeholder="Email (необязательно)">
+        <button type="submit">Создать преподавателя</button>
+    </form>
+</div>
+
+<button onclick="location.href='/admin/events'" style="background: #8B9A7B;">← Назад в админ-панель</button>
+
+{% endblock %}
