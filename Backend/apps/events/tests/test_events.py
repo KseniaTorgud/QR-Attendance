@@ -1,13 +1,18 @@
 from datetime import timedelta
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.events.models import Event
+from apps.events.models import Event, MandatoryStudent
+from apps.registrations.models import Registration
 
 
 User = get_user_model()
@@ -31,6 +36,14 @@ def event_payload():
         "max_participants": 10,
         "status": Event.EventStatus.REGISTRATION_OPEN,
     }
+
+
+def create_image_file(name="selfie.jpg", size=(100, 100), color=(0, 255, 0)):
+    file_obj = BytesIO()
+    image = Image.new("RGB", size, color)
+    image.save(file_obj, format="JPEG")
+    file_obj.seek(0)
+    return SimpleUploadedFile(name, file_obj.read(), content_type="image/jpeg")
 
 
 def test_teacher_can_create_event_with_qr(db):
@@ -312,3 +325,145 @@ def test_admin_can_update_foreign_teacher_event(db):
     assert response.status_code == status.HTTP_200_OK
     event.refresh_from_db()
     assert event.title == "Patched by admin"
+
+
+def test_create_event_with_mandatory_students_lines(db):
+    teacher = User.objects.create_user("teacher_mandatory", password="securepass123", role=User.UserRole.TEACHER)
+    client = auth_client(teacher)
+    payload = event_payload()
+    payload["mandatory_students_lines"] = "Ivan Petrov\nMaria Sidorova\nIvan Petrov"
+
+    response = client.post(reverse("events-list"), payload, format="json")
+
+    assert response.status_code == status.HTTP_201_CREATED
+    event = Event.objects.get(pk=response.data["id"])
+    full_names = list(event.mandatory_students.values_list("full_name", flat=True))
+    assert full_names == ["Ivan Petrov", "Maria Sidorova"]
+
+
+def test_mandatory_students_visible_only_for_owner_or_admin(db):
+    owner = User.objects.create_user("owner_mandatory", password="securepass123", role=User.UserRole.TEACHER)
+    foreign_teacher = User.objects.create_user(
+        "foreign_mandatory",
+        password="securepass123",
+        role=User.UserRole.TEACHER,
+    )
+    admin = User.objects.create_user(
+        "admin_mandatory",
+        password="securepass123",
+        role=User.UserRole.ADMIN,
+        is_staff=True,
+        is_superuser=True,
+    )
+    student = User.objects.create_user("student_mandatory", password="securepass123", role=User.UserRole.STUDENT)
+    event = Event.objects.create(
+        title="Mandatory visibility",
+        location="L",
+        start_at=timezone.now() + timedelta(days=2),
+        registration_deadline=timezone.now() + timedelta(days=1),
+        max_participants=10,
+        status=Event.EventStatus.REGISTRATION_OPEN,
+        created_by=owner,
+    )
+    MandatoryStudent.objects.create(event=event, full_name="Alice Cooper")
+
+    owner_response = auth_client(owner).get(reverse("events-mandatory-students", kwargs={"pk": event.id}))
+    admin_response = auth_client(admin).get(reverse("events-mandatory-students", kwargs={"pk": event.id}))
+    foreign_response = auth_client(foreign_teacher).get(reverse("events-mandatory-students", kwargs={"pk": event.id}))
+    student_response = auth_client(student).get(reverse("events-mandatory-students", kwargs={"pk": event.id}))
+
+    assert owner_response.status_code == status.HTTP_200_OK
+    assert admin_response.status_code == status.HTTP_200_OK
+    assert foreign_response.status_code == status.HTTP_403_FORBIDDEN
+    assert student_response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@override_settings(MEDIA_ROOT="test_media")
+def test_owner_can_mark_mandatory_attendance_and_upload_selfie(db):
+    teacher = User.objects.create_user("teacher_mark", password="securepass123", role=User.UserRole.TEACHER)
+    event = Event.objects.create(
+        title="Mandatory mark",
+        location="L",
+        start_at=timezone.now() + timedelta(days=2),
+        registration_deadline=timezone.now() + timedelta(days=1),
+        max_participants=10,
+        status=Event.EventStatus.REGISTRATION_OPEN,
+        created_by=teacher,
+    )
+    mandatory = MandatoryStudent.objects.create(event=event, full_name="Bob Martin")
+    client = auth_client(teacher)
+
+    mark_response = client.patch(
+        reverse(
+            "events-mark-mandatory-attendance",
+            kwargs={"pk": event.id, "mandatory_id": mandatory.id},
+        ),
+        {"attended": True},
+        format="json",
+    )
+    selfie_response = client.patch(
+        reverse(
+            "events-upload-mandatory-selfie",
+            kwargs={"pk": event.id, "mandatory_id": mandatory.id},
+        ),
+        {"selfie": create_image_file()},
+        format="multipart",
+    )
+
+    assert mark_response.status_code == status.HTTP_200_OK
+    assert selfie_response.status_code == status.HTTP_200_OK
+    mandatory.refresh_from_db()
+    assert mandatory.attended is True
+    assert mandatory.selfie
+
+
+@override_settings(MEDIA_ROOT="test_media")
+def test_attendance_summary_contains_mandatory_and_voluntary(db):
+    teacher = User.objects.create_user("teacher_summary", password="securepass123", role=User.UserRole.TEACHER)
+    student_mandatory = User.objects.create_user(
+        "student_mandatory_summary",
+        password="securepass123",
+        role=User.UserRole.STUDENT,
+        first_name="Ivan",
+        last_name="Petrov",
+    )
+    student_voluntary = User.objects.create_user(
+        "student_voluntary_summary",
+        password="securepass123",
+        role=User.UserRole.STUDENT,
+        first_name="Pavel",
+        last_name="Smirnov",
+    )
+    event = Event.objects.create(
+        title="Summary event",
+        location="L",
+        start_at=timezone.now() - timedelta(days=1),
+        registration_deadline=timezone.now() - timedelta(days=2),
+        max_participants=10,
+        status=Event.EventStatus.FINISHED,
+        created_by=teacher,
+    )
+    MandatoryStudent.objects.create(event=event, full_name="Petrov Ivan")
+    MandatoryStudent.objects.create(event=event, full_name="Obligatory Student")
+
+    Registration.objects.create(
+        student=student_mandatory,
+        event=event,
+        attendance_status=Registration.AttendanceStatus.CONFIRMED,
+        selfie=create_image_file(name="mandatory.jpg"),
+    )
+    Registration.objects.create(
+        student=student_voluntary,
+        event=event,
+        attendance_status=Registration.AttendanceStatus.CONFIRMED,
+        selfie=create_image_file(name="voluntary.jpg"),
+    )
+    client = auth_client(teacher)
+
+    response = client.get(reverse("events-attendance-summary", kwargs={"pk": event.id}))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data["mandatory_students"]) == 2
+    assert len(response.data["actual_participants"]) == 2
+    participant_types = {row["participant_type"] for row in response.data["combined_participants"]}
+    assert participant_types == {"mandatory", "voluntary"}

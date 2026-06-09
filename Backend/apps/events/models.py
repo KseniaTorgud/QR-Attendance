@@ -2,6 +2,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.common.validators import mandatory_selfie_upload_to
+
 from .services import generate_unique_qr_token
 
 
@@ -45,3 +47,22 @@ class Event(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class MandatoryStudent(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="mandatory_students")
+    full_name = models.CharField(max_length=255)
+    attended = models.BooleanField(null=True, blank=True)
+    attendance_marked_at = models.DateTimeField(null=True, blank=True)
+    selfie = models.ImageField(upload_to=mandatory_selfie_upload_to, null=True, blank=True)
+    selfie_uploaded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("full_name",)
+        constraints = [models.UniqueConstraint(fields=("event", "full_name"), name="uq_event_mandatory_full_name")]
+
+    def __str__(self) -> str:
+        return f"{self.event_id}:{self.full_name}"
