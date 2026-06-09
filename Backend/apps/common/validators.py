@@ -31,3 +31,8 @@ def validate_image_file(uploaded_file) -> None:
 def selfie_upload_to(instance, filename: str) -> str:
     extension = filename.split(".")[-1].lower() if "." in filename else "jpg"
     return f"selfies/{instance.event_id}/{uuid4().hex}.{extension}"
+
+
+def mandatory_selfie_upload_to(instance, filename: str) -> str:
+    extension = filename.split(".")[-1].lower() if "." in filename else "jpg"
+    return f"mandatory_selfies/{instance.event_id}/{uuid4().hex}.{extension}"
