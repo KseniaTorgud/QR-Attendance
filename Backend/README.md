@@ -20,6 +20,9 @@ Backend API for student registration to events by QR token with selfie-based att
 - JWT auth (`access` + `refresh`)
 - Events CRUD with owner-based permissions for teachers
 - QR token generation and regeneration
+- Mandatory students list per event (one full name per line)
+- Mandatory attendance marking and mandatory selfie upload by teacher/admin
+- Combined attendance summary: mandatory + voluntary (QR-confirmed) participants
 - Registration to event only via `register-by-qr` endpoint
 - Selfie upload (`multipart/form-data`) with size/type validation
 - Teacher/Admin attendance confirmation (`confirmed` / `rejected`)
@@ -102,6 +105,11 @@ Created/updated users:
 - `DELETE /api/v1/events/{id}/`
 - `POST /api/v1/events/{id}/regenerate-qr/`
 - `POST /api/v1/events/{id}/register-by-qr/`
+- `GET /api/v1/events/{id}/mandatory-students/`
+- `POST /api/v1/events/{id}/mandatory-students/`
+- `PATCH /api/v1/events/{id}/mandatory-students/{mandatory_id}/mark-attendance/`
+- `PATCH /api/v1/events/{id}/mandatory-students/{mandatory_id}/upload-selfie/`
+- `GET /api/v1/events/{id}/attendance-summary/`
 
 ### Registrations
 
@@ -110,6 +118,10 @@ Created/updated users:
 - `PATCH /api/v1/registrations/{id}/mark-attendance/`
 - `PATCH /api/v1/registrations/{id}/upload-selfie/`
 - `PATCH /api/v1/registrations/{id}/confirm/`
+
+`POST /api/v1/events/{id}/register-by-qr/` accepts:
+- required: `qr_token`
+- optional: `full_name`, `group`
 
 ### Stats and export
 
@@ -125,6 +137,22 @@ curl -X PATCH \
   "http://127.0.0.1:8000/api/v1/registrations/1/upload-selfie/" \
   -H "Authorization: Bearer <access_token>" \
   -F "selfie=@/path/to/selfie.jpg"
+```
+
+## Mandatory students input example
+
+You can send mandatory names during event creation:
+
+```json
+{
+  "title": "Math workshop",
+  "location": "Room 201",
+  "start_at": "2026-05-10T10:00:00Z",
+  "registration_deadline": "2026-05-09T23:59:00Z",
+  "max_participants": 30,
+  "status": "registration_open",
+  "mandatory_students_lines": "Ivan Petrov\nMaria Sidorova\nAlex Smirnov"
+}
 ```
 
 ## Tests

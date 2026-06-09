@@ -259,6 +259,185 @@ paths:
       responses:
         '204':
           description: Deleted
+  /api/v1/events/{id}/attendance-summary/:
+    get:
+      operationId: api_v1_events_attendance_summary_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this event.
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Combined attendance summary with mandatory and voluntary participants.
+  /api/v1/events/{id}/mandatory-students/:
+    get:
+      operationId: api_v1_events_mandatory_students_list
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this event.
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMandatoryStudentList'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMandatoryStudentList'
+          description: ''
+    post:
+      operationId: api_v1_events_mandatory_students_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this event.
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MandatoryStudentBulkRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MandatoryStudentBulkRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MandatoryStudentBulkRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMandatoryStudentList'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMandatoryStudentList'
+          description: ''
+  /api/v1/events/{id}/mandatory-students/{mandatory_id}/mark-attendance/:
+    patch:
+      operationId: api_v1_events_mandatory_students_mark_attendance_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this event.
+        required: true
+      - in: path
+        name: mandatory_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMandatoryStudentAttendanceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMandatoryStudentAttendanceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMandatoryStudentAttendanceRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MandatoryStudent'
+          description: ''
+  /api/v1/events/{id}/mandatory-students/{mandatory_id}/upload-selfie/:
+    patch:
+      operationId: api_v1_events_mandatory_students_upload_selfie_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this event.
+        required: true
+      - in: path
+        name: mandatory_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMandatoryStudentSelfieRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMandatoryStudentSelfieRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMandatoryStudentSelfieRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MandatoryStudent'
+          description: ''
   /api/v1/events/{id}/regenerate-qr/:
     post:
       operationId: api_v1_events_regenerate_qr_create
@@ -718,6 +897,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/Owner'
           readOnly: true
+        mandatory_students_count:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -731,6 +913,7 @@ components:
       - created_by
       - id
       - location
+      - mandatory_students_count
       - max_participants
       - qr_token
       - registration_deadline
@@ -793,12 +976,80 @@ components:
           format: int64
         status:
           $ref: '#/components/schemas/StatusEnum'
+        mandatory_students_lines:
+          type: string
+          writeOnly: true
+          description: One student full name per line.
+        mandatory_students:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 255
+          writeOnly: true
+          description: Optional list of student full names.
       required:
       - location
       - max_participants
       - registration_deadline
       - start_at
       - title
+    MandatoryStudent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        event:
+          type: integer
+          readOnly: true
+        full_name:
+          type: string
+          maxLength: 255
+        attended:
+          type: boolean
+          nullable: true
+        attendance_marked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        selfie:
+          type: string
+          format: uri
+          nullable: true
+        selfie_uploaded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attendance_marked_at
+      - created_at
+      - event
+      - full_name
+      - id
+      - selfie_uploaded_at
+      - updated_at
+    MandatoryStudentBulkRequest:
+      type: object
+      properties:
+        mandatory_students_lines:
+          type: string
+        mandatory_students:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 255
     Owner:
       type: object
       properties:
@@ -835,6 +1086,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Event'
+    PaginatedMandatoryStudentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MandatoryStudent'
     PaginatedRegistrationList:
       type: object
       required:
@@ -931,6 +1205,29 @@ components:
           format: int64
         status:
           $ref: '#/components/schemas/StatusEnum'
+        mandatory_students_lines:
+          type: string
+          writeOnly: true
+          description: One student full name per line.
+        mandatory_students:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 255
+          writeOnly: true
+          description: Optional list of student full names.
+    PatchedMandatoryStudentAttendanceRequest:
+      type: object
+      properties:
+        attended:
+          type: boolean
+    PatchedMandatoryStudentSelfieRequest:
+      type: object
+      properties:
+        selfie:
+          type: string
+          format: binary
     PatchedSelfieUploadRequest:
       type: object
       properties:
@@ -971,6 +1268,12 @@ components:
           type: string
           minLength: 1
           maxLength: 64
+        full_name:
+          type: string
+          maxLength: 255
+        group:
+          type: string
+          maxLength: 100
       required:
       - qr_token
     Registration:
@@ -989,6 +1292,12 @@ components:
           type: integer
           readOnly: true
         event_title:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        group:
           type: string
           readOnly: true
         registered_at:
@@ -1042,6 +1351,8 @@ components:
       - confirmed_by_username
       - event
       - event_title
+      - full_name
+      - group
       - id
       - registered_at
       - selfie
