@@ -109,6 +109,7 @@ def teacher_events():
         events = []
     
     return render_template("teacher_events.html", events=events)
+
 @app.route("/teacher/create", methods=["GET", "POST"])
 def teacher_create():
     if "access_token" not in session or session.get("role") != "teacher":
@@ -120,45 +121,70 @@ def teacher_create():
             "Content-Type": "application/json"
         }
         
-        # Собираем данные
+        # Даты
+        start_at = request.form.get("start_at")
+        registration_deadline = request.form.get("registration_deadline")
+        
+        if start_at and len(start_at) == 16:
+            start_at = start_at + ":00"
+        if registration_deadline and len(registration_deadline) == 16:
+            registration_deadline = registration_deadline + ":00"
+        
+        # ========== СОБИРАЕМ ОБЯЗАТЕЛЬНЫХ СТУДЕНТОВ ==========
+        # Получаем все поля full_name из динамических полей
+        full_names = request.form.getlist("full_name")
+        # Фильтруем пустые
+        mandatory_students_list = [name.strip() for name in full_names if name and name.strip()]
+        
+        # Превращаем в текст с переносами строк
+        mandatory_students_lines = "\n".join(mandatory_students_list)
+        # ====================================================
+        
         data = {
             "title": request.form.get("title"),
             "description": request.form.get("description"),
             "location": request.form.get("location"),
-            "start_at": request.form.get("start_at"),
-            "registration_deadline": request.form.get("registration_deadline"),
-            "max_participants": request.form.get("max_participants"),
+            "start_at": start_at,
+            "registration_deadline": registration_deadline,
+            "max_participants": int(request.form.get("max_participants", 50)),
             "status": "registration_open"
         }
         
-        # ПРОВЕРКА: выводим в терминал, что отправляем
-        print("=" * 50)
-        print("📤 ОТПРАВЛЯЕМЫЕ ДАННЫЕ:")
-        for key, value in data.items():
-            print(f"  {key}: {value} (тип: {type(value).__name__})")
-        print("=" * 50)
-        
-        # Преобразуем max_participants в int
-        if data["max_participants"]:
-            data["max_participants"] = int(data["max_participants"])
-        
-        # Добавляем :00 к датам, если нужно
-        if data["start_at"] and len(data["start_at"]) == 16:
-            data["start_at"] = data["start_at"] + ":00"
-        if data["registration_deadline"] and len(data["registration_deadline"]) == 16:
-            data["registration_deadline"] = data["registration_deadline"] + ":00"
+        # Добавляем обязательных студентов, если они есть
+        if mandatory_students_lines:
+            data["mandatory_students_lines"] = mandatory_students_lines
+            print(f"📋 Отправляем обязательных студентов: {mandatory_students_lines}")
         
         try:
+            # Получаем список существующих мероприятий для проверки дубликатов
+            events_response = requests.get(f"{API_BASE_URL}/events/", headers=headers, timeout=5)
+            events_list = []
+            if events_response.status_code == 200:
+                events_data = events_response.json()
+                if isinstance(events_data, dict):
+                    events_list = events_data.get("results", [])
+                elif isinstance(events_data, list):
+                    events_list = events_data
+            
+            # Проверка на дубликат по названию
+            existing_titles = [e.get("title", "").lower() for e in events_list]
+            if data["title"].lower() in existing_titles:
+                return render_template("teacher_create.html", error="Мероприятие с таким названием уже существует")
+            
+            # Отправляем запрос на создание
             response = requests.post(f"{API_BASE_URL}/events/", json=data, headers=headers, timeout=5)
-            print(f"📥 ОТВЕТ: {response.status_code}")
-            print(f"📥 ТЕКСТ ОТВЕТА: {response.text}")
+            
+            print(f"📤 Статус создания: {response.status_code}")
+            print(f"📤 Ответ: {response.text}")
             
             if response.status_code == 201:
                 return redirect(url_for("teacher_events"))
             else:
-                return render_template("teacher_create.html", error=f"Ошибка API: {response.text}")
+                return render_template("teacher_create.html", error=f"Ошибка: {response.text}")
+                
         except Exception as e:
-            return render_template("teacher_create.html", error=f"Ошибка подключения: {e}")
+            print(f"❌ Ошибка: {e}")
+            return render_template("teacher_create.html", error=f"Ошибка: {e}")
     
     return render_template("teacher_create.html")
 
@@ -172,34 +198,95 @@ def teacher_event(event_id):
     try:
         # Получаем мероприятие
         event_response = requests.get(f"{API_BASE_URL}/events/{event_id}/", headers=headers, timeout=5)
+        if event_response.status_code != 200:
+            return redirect(url_for("teacher_events"))
+        event = event_response.json()
         
-        if event_response.status_code == 200:
-            event = event_response.json()
-            
-            # Проверяем, что мероприятие принадлежит текущему преподавателю
-            user_id = session.get("user_id")
-            event_teacher_id = event.get("created_by", {}).get("id") if event.get("created_by") else None
-            
-            if event_teacher_id != user_id:
-                # Если это не его мероприятие — возвращаем на список
-                print(f"⚠️ Доступ запрещён: преподаватель {user_id} пытался открыть мероприятие {event_id} (создатель {event_teacher_id})")
-                return redirect(url_for("teacher_events"))
-            
-            # Получаем регистрации
-            registrations_response = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
-            all_registrations = registrations_response.json().get("results", []) if registrations_response.status_code == 200 else []
-            registrations = [r for r in all_registrations if r.get("event") == event_id]
-            
-        else:
-            event = None
-            registrations = []
-            
+        if event.get("created_by", {}).get("id") != session.get("user_id"):
+            return redirect(url_for("teacher_events"))
+        
+        # Получаем обязательных студентов
+        mandatory_response = requests.get(f"{API_BASE_URL}/events/{event_id}/mandatory-students/", headers=headers, timeout=5)
+        mandatory_students = []
+        if mandatory_response.status_code == 200:
+            data = mandatory_response.json()
+            mandatory_students = data.get("results", []) if isinstance(data, dict) else data
+        
+        # Получаем регистрации по QR
+        registrations_response = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
+        registrations = []
+        if registrations_response.status_code == 200:
+            data = registrations_response.json()
+            all_regs = data.get("results", []) if isinstance(data, dict) else data
+            registrations = [r for r in all_regs if r.get("event") == event_id]
+        
+        # ========== СИНХРОНИЗАЦИЯ ==========
+        # Создаём словарь обязательных студентов по ФИО
+        mandatory_by_name = {s.get("full_name", "").strip().lower(): s for s in mandatory_students}
+        
+        # Проходим по всем регистрациям
+        for reg in registrations:
+            reg_name = reg.get("full_name", "").strip().lower()
+            if reg_name in mandatory_by_name:
+                mandatory_student = mandatory_by_name[reg_name]
+                # Если обязательный студент ещё не отмечен как пришедший
+                if not mandatory_student.get("attended"):
+                    print(f"🔄 Синхронизация: {reg_name} -> отмечаем как пришедшего")
+                    # Отмечаем присутствие
+                    requests.patch(
+                        f"{API_BASE_URL}/events/{event_id}/mandatory-students/{mandatory_student['id']}/mark-attendance/",
+                        json={"attended": True},
+                        headers=headers,
+                        timeout=5
+                    )
+                    # Если есть фото в регистрации, копируем в mandatory
+                    if reg.get("selfie"):
+                        # Скачиваем фото из регистрации
+                        selfie_url = reg.get("selfie")
+                        if selfie_url:
+                            # Загружаем фото в mandatory (через upload-selfie)
+                            with requests.get(selfie_url, stream=True) as r:
+                                if r.status_code == 200:
+                                    files = {'selfie': (selfie_url.split('/')[-1], r.raw, 'image/jpeg')}
+                                    requests.patch(
+                                        f"{API_BASE_URL}/events/{event_id}/mandatory-students/{mandatory_student['id']}/upload-selfie/",
+                                        files=files,
+                                        headers=headers,
+                                        timeout=10
+                                    )
+        
+        # Обновляем список обязательных студентов после синхронизации
+        mandatory_response = requests.get(f"{API_BASE_URL}/events/{event_id}/mandatory-students/", headers=headers, timeout=5)
+        mandatory_students = []
+        if mandatory_response.status_code == 200:
+            data = mandatory_response.json()
+            mandatory_students = data.get("results", []) if isinstance(data, dict) else data
+        
+        # Разделяем регистрации: обязательные (уже есть в mandatory) и остальные
+        mandatory_names = {s.get("full_name", "").strip().lower() for s in mandatory_students}
+        qr_only_registrations = []
+        mandatory_registrations = []
+        
+        for reg in registrations:
+            reg_name = reg.get("full_name", "").strip().lower()
+            if reg_name in mandatory_names:
+                mandatory_registrations.append(reg)
+            else:
+                qr_only_registrations.append(reg)
+        
     except Exception as e:
         print(f"Ошибка: {e}")
         event = None
-        registrations = []
+        mandatory_students = []
+        qr_only_registrations = []
+        mandatory_registrations = []
     
-    return render_template("teacher_event.html", event=event, registrations=registrations)
+    return render_template("teacher_event.html", 
+                          event=event, 
+                          mandatory_students=mandatory_students,
+                          registrations=qr_only_registrations,
+                          mandatory_registrations=mandatory_registrations)
+
 @app.route("/teacher/qr/<int:event_id>")
 def teacher_qr(event_id):
     if "access_token" not in session or session.get("role") != "teacher":
@@ -305,7 +392,32 @@ def teacher_generate_qr_ajax(event_id):
     except Exception as e:
         print(f"Ошибка генерации QR: {e}")
         return {"success": False, "error": str(e)}, 500
+
+@app.route("/teacher/mark_mandatory_attendance/<int:event_id>/<int:mandatory_id>", methods=["POST"])
+def mark_mandatory_attendance(event_id, mandatory_id):
+    if "access_token" not in session or session.get("role") != "teacher":
+        return {"success": False, "error": "Нет доступа"}, 403
     
+    headers = {
+        "Authorization": f"Bearer {session['access_token']}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.patch(
+            f"{API_BASE_URL}/events/{event_id}/mandatory-students/{mandatory_id}/mark-attendance/",
+            json={"attended": True},
+            headers=headers,
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            return {"success": True}
+        else:
+            return {"success": False, "error": response.text}, response.status_code
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}, 500    
     
 @app.route("/teacher/generate_qr/<int:event_id>", methods=["POST"])
 def teacher_generate_qr(event_id):
@@ -439,7 +551,6 @@ def teacher_edit_event(event_id):
     
     # POST: сохраняем изменения
     if request.method == "POST":
-        # Добавляем :00 к датам, если нужно
         start_at = request.form.get("start_at")
         registration_deadline = request.form.get("registration_deadline")
         
@@ -475,7 +586,6 @@ def teacher_edit_event(event_id):
         except Exception as e:
             event = requests.get(f"{API_BASE_URL}/events/{event_id}/", headers=headers).json()
             return render_template("edit_event.html", event=event, error=f"Ошибка: {e}")
-
 
 @app.route("/teacher/delete/<int:event_id>", methods=["POST"])
 def teacher_delete_event(event_id):
@@ -557,7 +667,7 @@ def admin_edit_event(event_id):
         except Exception as e:
             event = requests.get(f"{API_BASE_URL}/events/{event_id}/", headers=headers).json()
             return render_template("edit_event.html", event=event, error=f"Ошибка: {e}")
-
+        
 
 @app.route("/admin/delete/<int:event_id>", methods=["POST"])
 def admin_delete_event(event_id):
@@ -629,6 +739,8 @@ def fetch_with_pagination(url, headers, page=1, page_size=10):
 # Страница регистрации студента
 @app.route("/student/register", methods=["GET", "POST"])
 def student_register():
+    redirect_url = request.args.get("redirect", "/student/events")
+    
     if request.method == "POST":
         data = {
             "username": request.form.get("username"),
@@ -663,7 +775,8 @@ def student_register():
                     session["role"] = "student"
                     session["username"] = data["username"]
                     
-                    return redirect(url_for("student_events"))
+                    # 🔥 Редирект на сохранённый URL или на страницу отметки
+                    return redirect(redirect_url)
                 else:
                     return render_template("student_register.html", error="Аккаунт создан, но не удалось войти")
             else:
@@ -778,98 +891,227 @@ def student_my_registrations():
     
     return render_template("student_my_registrations.html", registrations=registrations)
 
-
 @app.route("/attend/<int:event_id>", methods=["GET", "POST"])
 def attend_event(event_id):
-    """Страница отметки студента по QR (упрощённая)"""
-    
-    # Если студент не авторизован, показываем форму входа
+    """Страница отметки студента по QR с синхронизацией обязательных"""
+
+    # Проверяем, не зарегистрирован ли уже этот студент на это мероприятие
+    reg_check_response = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
+    already_exists = False
+    if reg_check_response.status_code == 200:
+        reg_data = reg_check_response.json()
+        all_regs = reg_data.get("results", []) if isinstance(reg_data, dict) else reg_data
+        for reg in all_regs:
+            if reg.get("event") == event_id and reg.get("full_name") == student_name:
+                already_exists = True
+                break
+
+    if already_exists:
+        return render_template("attend.html", event=event, error="Вы уже зарегистрированы на это мероприятие!")
+
+    # Если студент не авторизован — сохраняем редирект и показываем вход
     if "access_token" not in session or session.get("role") != "student":
         session["redirect_after_login"] = f"/attend/{event_id}"
         return render_template("attend_login.html", event_id=event_id)
     
+
     headers = {"Authorization": f"Bearer {session['access_token']}"}
-    
+
+    # Запрет для преподавателей и админов регистрироваться на мероприятия
+    if session.get("role") in ["admin", "teacher"]:
+        return render_template("home.html", error="Преподаватели и администраторы не могут регистрироваться на мероприятия как студенты")
+
     try:
         # Получаем мероприятие
-        response = requests.get(f"{API_BASE_URL}/events/{event_id}/", headers=headers, timeout=5)
-        event = response.json() if response.status_code == 200 else None
-        
-        if not event:
+        event_resp = requests.get(f"{API_BASE_URL}/events/{event_id}/", headers=headers, timeout=5)
+        if event_resp.status_code != 200:
             return render_template("home.html", error="Мероприятие не найдено")
-        
-        # Проверяем, не зарегистрирован ли уже
-        reg_response = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
-        already_registered = False
-        if reg_response.status_code == 200:
-            registrations = reg_response.json().get("results", [])
-            already_registered = any(r.get("event") == event_id for r in registrations)
-        
-        if request.method == "POST":
-            student_name = request.form.get("student_name")
-            student_group = request.form.get("student_group")
+        event = event_resp.json()
+
+        # Проверяем, не истекло ли мероприятие
+        if event.get("start_at"):
+            event_date_str = event.get("start_at")
+            # Убираем Z и парсим
+            event_date_str = event_date_str.replace('Z', '+00:00')
+            event_date = datetime.fromisoformat(event_date_str)
             
+            if event_date < datetime.now(event_date.tzinfo):
+                return render_template("event_expired.html", event=event)
+
+    
+        # Получаем список обязательных студентов
+        mand_resp = requests.get(f"{API_BASE_URL}/events/{event_id}/mandatory-students/", headers=headers, timeout=5)
+        mandatory_students = []
+        if mand_resp.status_code == 200:
+            data = mand_resp.json()
+            if isinstance(data, dict):
+                mandatory_students = data.get("results", [])
+            elif isinstance(data, list):
+                mandatory_students = data
+
+        if request.method == "POST":
+            student_name = request.form.get("student_name", "").strip()
+            student_group = request.form.get("student_group", "").strip()
+            qr_token = event.get("qr_token")
+
             # Обработка фото
             selfie_path = None
             if 'selfie' in request.files:
                 file = request.files['selfie']
                 if file and allowed_file(file.filename):
                     filename = secure_filename(f"{student_name}_{student_group}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg")
-                    selfie_folder = os.path.join("static", "selfies")
-                    os.makedirs(selfie_folder, exist_ok=True)
-                    file_path = os.path.join(selfie_folder, filename)
+                    folder = os.path.join("static", "selfies")
+                    os.makedirs(folder, exist_ok=True)
+                    file_path = os.path.join(folder, filename)
                     file.save(file_path)
                     selfie_path = f"selfies/{filename}"
-            
-            # Регистрация через API
-            qr_token = event.get("qr_token")
-            register_response = requests.post(
-                f"{API_BASE_URL}/events/{event_id}/register-by-qr/",
-                json={"qr_token": qr_token},
-                headers=headers,
-                timeout=5
-            )
-            
-            if register_response.status_code == 201:
-                registration_data = register_response.json()
-                registration_id = registration_data.get("id")
-                
-                # Сразу подтверждаем регистрацию (меняем статус на confirmed)
-                confirm_response = requests.patch(
-                    f"{API_BASE_URL}/registrations/{registration_id}/confirm/",
-                    json={"attendance_status": "confirmed"},
+
+            # === ПОИСК СОВПАДЕНИЯ В ОБЯЗАТЕЛЬНОМ СПИСКЕ ===
+            matched = None
+            for s in mandatory_students:
+                if s.get("full_name", "").strip().lower() == student_name.lower():
+                    matched = s
+                    break
+
+            if matched:
+                # === СТУДЕНТ ИЗ ОБЯЗАТЕЛЬНОГО СПИСКА ===
+                mandatory_id = matched["id"]
+
+                # 1. Отмечаем присутствие в mandatory-students
+                requests.patch(
+                    f"{API_BASE_URL}/events/{event_id}/mandatory-students/{mandatory_id}/mark-attendance/",
+                    json={"attended": True},
                     headers=headers,
                     timeout=5
                 )
-                print(f"Подтверждение регистрации: {confirm_response.status_code}")
-                
-                # Загрузка фото
-                if selfie_path and registration_id:
-                    full_path = os.path.join("static", selfie_path)
-                    with open(full_path, 'rb') as f:
-                        files = {'selfie': f}
-                        selfie_response = requests.patch(
-                            f"{API_BASE_URL}/registrations/{registration_id}/upload-selfie/",
-                            files=files,
+
+                # 2. Загружаем фото в mandatory-students
+                if selfie_path:
+                    with open(os.path.join("static", selfie_path), "rb") as f:
+                        requests.patch(
+                            f"{API_BASE_URL}/events/{event_id}/mandatory-students/{mandatory_id}/upload-selfie/",
+                            files={"selfie": f},
                             headers=headers,
                             timeout=10
                         )
-                        print(f"Загрузка фото: {selfie_response.status_code}")
-                
+
+                # 3. Проверяем, есть ли уже запись в registrations
+                reg_resp = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
+                existing_reg = None
+                if reg_resp.status_code == 200:
+                    reg_data = reg_resp.json()
+                    all_regs = reg_data.get("results", []) if isinstance(reg_data, dict) else reg_data
+                    for r in all_regs:
+                        if r.get("event") == event_id and r.get("full_name") == student_name:
+                            existing_reg = r
+                            break
+
+                if existing_reg:
+                    # Обновляем фото в существующей регистрации
+                    if selfie_path:
+                        with open(os.path.join("static", selfie_path), "rb") as f:
+                            requests.patch(
+                                f"{API_BASE_URL}/registrations/{existing_reg['id']}/upload-selfie/",
+                                files={"selfie": f},
+                                headers=headers,
+                                timeout=10
+                            )
+                else:
+                    # Создаём новую регистрацию с ФИО и группой
+                    reg_payload = {
+                        "qr_token": qr_token,
+                        "full_name": student_name,
+                        "group": student_group
+                    }
+                    reg_resp = requests.post(
+                        f"{API_BASE_URL}/events/{event_id}/register-by-qr/",
+                        json=reg_payload,
+                        headers=headers,
+                        timeout=5
+                    )
+                    
+                    # 🔥 ПОДТВЕРЖДАЕМ РЕГИСТРАЦИЮ ДЛЯ ОБЯЗАТЕЛЬНОГО СТУДЕНТА
+                    if reg_resp.status_code == 201:
+                        reg_id = reg_resp.json().get("id")
+                        requests.patch(
+                            f"{API_BASE_URL}/registrations/{reg_id}/confirm/",
+                            json={"attendance_status": "confirmed"},
+                            headers=headers,
+                            timeout=5
+                        )
+                    
+                    if reg_resp.status_code == 201 and selfie_path:
+                        reg_id = reg_resp.json().get("id")
+                        with open(os.path.join("static", selfie_path), "rb") as f:
+                            requests.patch(
+                                f"{API_BASE_URL}/registrations/{reg_id}/upload-selfie/",
+                                files={"selfie": f},
+                                headers=headers,
+                                timeout=10
+                            )
+
                 return render_template("attend_success.html", event=event)
+
             else:
-                return render_template("attend.html", event=event, already_registered=already_registered, error="Ошибка регистрации")
-        
+                # === НОВЫЙ СТУДЕНТ (НЕ ИЗ ОБЯЗАТЕЛЬНОГО СПИСКА) ===
+                reg_payload = {
+                    "qr_token": qr_token,
+                    "full_name": student_name,
+                    "group": student_group
+                }
+                reg_resp = requests.post(
+                    f"{API_BASE_URL}/events/{event_id}/register-by-qr/",
+                    json=reg_payload,
+                    headers=headers,
+                    timeout=5
+                )
+                
+                # 🔥 ВОТ ЗДЕСЬ ДОБАВИЛ ПОДТВЕРЖДЕНИЕ ДЛЯ НОВОГО СТУДЕНТА
+                if reg_resp.status_code == 201:
+                    reg_id = reg_resp.json().get("id")
+                    # Сразу подтверждаем регистрацию
+                    requests.patch(
+                        f"{API_BASE_URL}/registrations/{reg_id}/confirm/",
+                        json={"attendance_status": "confirmed"},
+                        headers=headers,
+                        timeout=5
+                    )
+                    
+                    # Загружаем фото, если есть
+                    if selfie_path:
+                        with open(os.path.join("static", selfie_path), "rb") as f:
+                            requests.patch(
+                                f"{API_BASE_URL}/registrations/{reg_id}/upload-selfie/",
+                                files={"selfie": f},
+                                headers=headers,
+                                timeout=10
+                            )
+                # =============================================
+
+                return render_template("attend_success.html", event=event)
+
+        # GET — проверяем, регистрировался ли уже студент
+        already_registered = False
+        reg_resp = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
+        if reg_resp.status_code == 200:
+            reg_data = reg_resp.json()
+            all_regs = reg_data.get("results", []) if isinstance(reg_data, dict) else reg_data
+            for r in all_regs:
+                if r.get("event") == event_id:
+                    already_registered = True
+                    break
+
         return render_template("attend.html", event=event, already_registered=already_registered)
-        
+
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"Ошибка в /attend/{event_id}: {e}")
         return render_template("home.html", error="Ошибка при загрузке мероприятия")
 
 @app.route("/attend_login", methods=["POST"])
 def attend_login():
     username = request.form.get("username")
     password = request.form.get("password")
+    event_id = request.form.get("event_id")
     
     try:
         response = requests.post(f"{API_BASE_URL}/auth/token/", json={
@@ -891,15 +1133,18 @@ def attend_login():
                 session["role"] = user["role"]
                 session["username"] = user["username"]
                 
-                # Перенаправляем на страницу отметки
-                redirect_url = session.pop("redirect_after_login", "/student/events")
-                return redirect(redirect_url)
+                # 🔥 ВАЖНО: редирект на страницу отметки, а не на список мероприятий
+                if event_id:
+                    return redirect(f"/attend/{event_id}")
+                elif session.get("redirect_after_login"):
+                    return redirect(session.pop("redirect_after_login"))
+                else:
+                    return redirect(url_for("student_events"))
         
-        return render_template("attend_login.html", error="Неверные логин или пароль")
+        return render_template("attend_login.html", event_id=event_id, error="Неверные логин или пароль")
         
     except Exception as e:
-        return render_template("attend_login.html", error="Ошибка подключения")
-
+        return render_template("attend_login.html", event_id=event_id, error="Ошибка подключения")
 
 # Отметка присутствия студентом
 @app.route("/student/mark-attendance/<int:registration_id>", methods=["POST"])
@@ -924,6 +1169,126 @@ def student_mark_attendance(registration_id):
     except Exception as e:
         return {"success": False, "error": str(e)}, 500
 
+@app.route("/teacher/edit-mandatory/<int:event_id>", methods=["GET", "POST"])
+def teacher_edit_mandatory(event_id):
+    if "access_token" not in session or session.get("role") != "teacher":
+        return redirect(url_for("home"))
+    
+    headers = {"Authorization": f"Bearer {session['access_token']}"}
+    
+    # Получаем мероприятие
+    event_response = requests.get(f"{API_BASE_URL}/events/{event_id}/", headers=headers, timeout=5)
+    if event_response.status_code != 200:
+        return redirect(url_for("teacher_events"))
+    event = event_response.json()
+    
+    # Проверяем, что мероприятие принадлежит преподавателю
+    if event.get("created_by", {}).get("id") != session.get("user_id"):
+        return redirect(url_for("teacher_events"))
+    
+    # ========== POST: Сохранение изменений ==========
+    if request.method == "POST":
+        mandatory_students_lines = request.form.get("mandatory_students_lines", "").strip()
+        
+        # Получаем текущий список обязательных студентов
+        mand_response = requests.get(f"{API_BASE_URL}/events/{event_id}/mandatory-students/", headers=headers, timeout=5)
+        old_students = []
+        if mand_response.status_code == 200:
+            mand_data = mand_response.json()
+            old_students = mand_data.get("results", []) if isinstance(mand_data, dict) else mand_data
+        
+        # Удаляем каждого обязательного студента
+        for student in old_students:
+            # Удаляем из обязательных
+            delete_response = requests.delete(
+                f"{API_BASE_URL}/events/{event_id}/mandatory-students/{student['id']}/",
+                headers=headers,
+                timeout=5
+            )
+            print(f"🗑️ Удалён обязательный студент {student.get('full_name')}: {delete_response.status_code}")
+            
+            # Также удаляем регистрацию этого студента (чтобы не восстановился при синхронизации)
+            reg_response = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
+            if reg_response.status_code == 200:
+                reg_data = reg_response.json()
+                all_regs = reg_data.get("results", []) if isinstance(reg_data, dict) else reg_data
+                for reg in all_regs:
+                    if reg.get("event") == event_id and reg.get("full_name") == student.get("full_name"):
+                        delete_reg_response = requests.delete(
+                            f"{API_BASE_URL}/registrations/{reg['id']}/",
+                            headers=headers,
+                            timeout=5
+                        )
+                        print(f"🗑️ Удалена регистрация {student.get('full_name')}: {delete_reg_response.status_code}")
+        
+        # Создаём новых студентов
+        if mandatory_students_lines:
+            create_response = requests.post(
+                f"{API_BASE_URL}/events/{event_id}/mandatory-students/",
+                json={"mandatory_students_lines": mandatory_students_lines},
+                headers=headers,
+                timeout=5
+            )
+            print(f"📤 Создание обязательных студентов: {create_response.status_code}")
+            if create_response.status_code != 200 and create_response.status_code != 201:
+                print(f"Ошибка: {create_response.text}")
+        
+        # Получаем обновлённый список для отображения
+        mand_response = requests.get(f"{API_BASE_URL}/events/{event_id}/mandatory-students/", headers=headers, timeout=5)
+        mandatory_students_list = []
+        if mand_response.status_code == 200:
+            mand_data = mand_response.json()
+            mandatory_students_list = mand_data.get("results", []) if isinstance(mand_data, dict) else mand_data
+        
+        # Формируем строки для текстового поля
+        mandatory_lines = ""
+        for student in mandatory_students_list:
+            mandatory_lines += f"{student.get('full_name', '')}\n"
+        
+        return render_template("edit_mandatory_students.html", 
+                              event=event, 
+                              mandatory_lines=mandatory_lines,
+                              mandatory_students_list=mandatory_students_list,
+                              success="Список обязательных студентов обновлён!")
+    
+    # ========== GET: Показать текущий список ==========
+    mand_response = requests.get(f"{API_BASE_URL}/events/{event_id}/mandatory-students/", headers=headers, timeout=5)
+    mandatory_lines = ""
+    mandatory_students_list = []
+    
+    if mand_response.status_code == 200:
+        mand_data = mand_response.json()
+        mandatory_students_list = mand_data.get("results", []) if isinstance(mand_data, dict) else mand_data
+        for student in mandatory_students_list:
+            mandatory_lines += f"{student.get('full_name', '')}\n"
+    
+    return render_template("edit_mandatory_students.html", 
+                          event=event, 
+                          mandatory_lines=mandatory_lines,
+                          mandatory_students_list=mandatory_students_list)
+
+@app.route("/teacher/delete-mandatory/<int:event_id>/<int:mandatory_id>", methods=["POST"])
+def teacher_delete_mandatory(event_id, mandatory_id):
+    if "access_token" not in session or session.get("role") != "teacher":
+        return {"success": False, "error": "Нет доступа"}, 403
+    
+    headers = {"Authorization": f"Bearer {session['access_token']}"}
+    
+    try:
+        response = requests.delete(
+            f"{API_BASE_URL}/events/{event_id}/mandatory-students/{mandatory_id}/",
+            headers=headers,
+            timeout=5
+        )
+        
+        if response.status_code == 204:
+            return {"success": True}
+        else:
+            return {"success": False, "error": response.text}, response.status_code
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}, 500
+                             
 # ---------- АДМИН ----------
 @app.route("/admin/events")
 def admin_events():
@@ -984,100 +1349,42 @@ def admin_event(event_id):
     try:
         # Получаем мероприятие
         event_response = requests.get(f"{API_BASE_URL}/events/{event_id}/", headers=headers, timeout=5)
+        if event_response.status_code != 200:
+            return redirect(url_for("admin_events"))
+        event = event_response.json()
         
-        if event_response.status_code == 200:
-            event = event_response.json()
-            
-            # Получаем регистрации на это мероприятие
-            registrations_response = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
-            all_registrations = registrations_response.json().get("results", []) if registrations_response.status_code == 200 else []
-            
-            # Фильтруем по event_id
-            registrations = [r for r in all_registrations if r.get("event") == event_id]
-            
-            # Имя преподавателя
-            teacher_name = event.get("created_by", {}).get("username", "Неизвестен")
-            
-        else:
-            event = None
-            registrations = []
-            teacher_name = "Неизвестен"
-            
+        # Получаем обязательных студентов
+        mandatory_response = requests.get(f"{API_BASE_URL}/events/{event_id}/mandatory-students/", headers=headers, timeout=5)
+        mandatory_students = []
+        if mandatory_response.status_code == 200:
+            data = mandatory_response.json()
+            mandatory_students = data.get("results", []) if isinstance(data, dict) else data
+        
+        # Получаем регистрации по QR
+        registrations_response = requests.get(f"{API_BASE_URL}/registrations/", headers=headers, timeout=5)
+        registrations = []
+        if registrations_response.status_code == 200:
+            data = registrations_response.json()
+            all_regs = data.get("results", []) if isinstance(data, dict) else data
+            registrations = [r for r in all_regs if r.get("event") == event_id]
+        
+        # Имя преподавателя
+        teacher_name = event.get("created_by", {}).get("username", "Неизвестен")
+        
     except Exception as e:
         print(f"Ошибка: {e}")
         event = None
+        mandatory_students = []
         registrations = []
         teacher_name = "Неизвестен"
     
-    return render_template("admin_event.html", event=event, teacher_name=teacher_name, registrations=registrations)
+    return render_template("admin_event.html", 
+                          event=event, 
+                          teacher_name=teacher_name,
+                          mandatory_students=mandatory_students,
+                          registrations=registrations)
 
-@app.route("/admin/create-teacher", methods=["GET", "POST"])
-def admin_create_teacher():
-    if "access_token" not in session or session.get("role") != "admin":
-        return redirect(url_for("home"))
-    
-    if request.method == "POST":
-        headers = {
-            "Authorization": f"Bearer {session['access_token']}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "username": request.form.get("username"),
-            "password": request.form.get("password"),
-            "first_name": request.form.get("first_name"),
-            "last_name": request.form.get("last_name"),
-            "is_active": True
-        }
-        
-        # Добавляем email, если он указан
-        email = request.form.get("email")
-        if email:
-            data["email"] = email
-        
-        try:
-            response = requests.post(
-                f"{API_BASE_URL}/users/teachers/", 
-                json=data, 
-                headers=headers,
-                timeout=5
-            )
-            
-            if response.status_code == 201:
-                return render_template(
-                    "admin_create_teacher.html", 
-                    success=f"✅ Преподаватель {data['username']} успешно создан!"
-                )
-            else:
-                # Обрабатываем ошибки валидации
-                error_text = response.text
-                try:
-                    error_json = response.json()
-                    if isinstance(error_json, dict):
-                        error_messages = []
-                        for field, errors in error_json.items():
-                            error_messages.append(f"{field}: {', '.join(errors)}")
-                        error_text = "\n".join(error_messages)
-                except:
-                    pass
-                
-                return render_template(
-                    "admin_create_teacher.html", 
-                    error=f"Ошибка: {error_text}"
-                )
-                
-        except requests.exceptions.ConnectionError:
-            return render_template(
-                "admin_create_teacher.html", 
-                error="Ошибка подключения к бэкенду. Убедись, что сервер запущен."
-            )
-        except Exception as e:
-            return render_template(
-                "admin_create_teacher.html", 
-                error=f"Неизвестная ошибка: {e}"
-            )
-    
-    return render_template("admin_create_teacher.html")
+
 
 # Подтверждение/отклонение регистрации (админ и преподаватель)
 @app.route("/admin/confirm-registration/<int:registration_id>", methods=["POST"])
@@ -1143,7 +1450,77 @@ def admin_export_registrations(event_id):
             
     except Exception as e:
         return f"Ошибка: {e}", 500
+
+@app.route("/admin/create-teacher", methods=["GET", "POST"])
+def admin_create_teacher():
+    if "access_token" not in session or session.get("role") != "admin":
+        return redirect(url_for("home"))
     
+    if request.method == "POST":
+        headers = {
+            "Authorization": f"Bearer {session['access_token']}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "username": request.form.get("username"),
+            "password": request.form.get("password"),
+            "first_name": request.form.get("first_name"),
+            "last_name": request.form.get("last_name"),
+            "is_active": True
+        }
+        
+        email = request.form.get("email")
+        if email:
+            data["email"] = email
+        
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/users/teachers/", 
+                json=data, 
+                headers=headers,
+                timeout=5
+            )
+            
+            print(f"📤 Статус создания преподавателя: {response.status_code}")
+            print(f"📤 Ответ: {response.text}")
+            
+            if response.status_code == 201:
+                return render_template(
+                    "admin_create_teacher.html", 
+                    success=f"✅ Преподаватель {data['username']} успешно создан!"
+                )
+            else:
+                error_text = response.text
+                try:
+                    error_json = response.json()
+                    if isinstance(error_json, dict):
+                        error_messages = []
+                        for field, errors in error_json.items():
+                            error_messages.append(f"{field}: {', '.join(errors)}")
+                        error_text = "\n".join(error_messages)
+                except:
+                    pass
+                
+                return render_template(
+                    "admin_create_teacher.html", 
+                    error=f"Ошибка: {error_text}"
+                )
+                
+        except requests.exceptions.ConnectionError:
+            return render_template(
+                "admin_create_teacher.html", 
+                error="Ошибка подключения к бэкенду. Убедись, что сервер запущен."
+            )
+        except Exception as e:
+            return render_template(
+                "admin_create_teacher.html", 
+                error=f"Неизвестная ошибка: {e}"
+            )
+    
+    return render_template("admin_create_teacher.html")
+
+
 @app.route("/admin/registrations")
 def admin_registrations():
     if "access_token" not in session or session.get("role") != "admin":
