@@ -30,4 +30,16 @@
     <button onclick="location.href='/'" style="background: #8B9A7B;">Войти</button>
 </div>
 
+<script>
+function validateUsername() {
+    const username = document.getElementById('username').value.trim();
+    const latinRegex = /^[a-zA-Z0-9_]+$/;
+    if (!latinRegex.test(username)) {
+        alert('Имя пользователя должно содержать только латинские буквы, цифры и знак подчёркивания');
+        return false;
+    }
+    return true;
+}
+</script>
+
 {% endblock %}

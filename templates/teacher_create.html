@@ -4,15 +4,141 @@
 <div class="card">
     <h2>Создать мероприятие</h2>
 
-    <form method="POST" action="/teacher/create">
-        <input type="text" name="title" placeholder="Название" required>
+    {% if error %}
+    <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/teacher/create" id="createEventForm">
+        <input type="text" name="title" id="event_title" placeholder="Название" required>
         <input type="datetime-local" name="start_at" required>
         <input type="datetime-local" name="registration_deadline" required>
         <input type="text" name="location" placeholder="Место проведения" required>
         <input type="number" name="max_participants" placeholder="Максимум участников" value="50" required>
         <textarea name="description" placeholder="Описание" rows="4"></textarea>
-        <button type="submit">Создать мероприятие</button>
+        
+        <!-- Обязательные студенты (динамические поля) -->
+        <div style="margin-top: 20px;">
+            <label style="font-weight: 600;">👥 Обязательные студенты</label>
+            <div id="students-container">
+                <div class="student-row" style="display: flex; gap: 10px; margin-top: 10px;">
+                    <input type="text" name="full_name" class="student-name" placeholder="ФИО студента" style="flex: 1;">
+                    <button type="button" class="remove-student-btn" style="width: auto; background: #f44336; padding: 12px 16px; display: none;">✖</button>
+                </div>
+            </div>
+            <button type="button" id="add-student-btn" style="margin-top: 10px; width: auto; background: #2196F3; padding: 10px 20px;">+ Добавить студента</button>
+            <p style="font-size: 12px; color: #666; margin-top: 10px;">Добавьте студентов, которые обязательно должны быть на мероприятии</p>
+        </div>
+        
+        <button type="submit" id="submitBtn">Создать мероприятие</button>
     </form>
 </div>
+
+<script>
+// Проверка названия мероприятия
+function checkEventTitle() {
+    const title = document.getElementById('event_title').value.trim();
+    if (title.length < 3) {
+        alert('Название мероприятия должно быть не менее 3 символов');
+        return false;
+    }
+    return true;
+}
+
+// Проверка дубликатов студентов в обязательном списке
+function hasDuplicateStudents() {
+    const studentInputs = document.querySelectorAll('.student-name');
+    const names = [];
+    
+    for (let input of studentInputs) {
+        const name = input.value.trim().toLowerCase();
+        if (name) {
+            if (names.includes(name)) {
+                alert('Ошибка: Студент "' + input.value.trim() + '" уже добавлен в список!');
+                input.focus();
+                return true;
+            }
+            names.push(name);
+        }
+    }
+    return false;
+}
+
+// Проверка перед отправкой формы
+document.getElementById('createEventForm').addEventListener('submit', function(e) {
+    // Проверяем название
+    if (!checkEventTitle()) {
+        e.preventDefault();
+        return;
+    }
+    
+    // Проверяем дубликаты студентов
+    if (hasDuplicateStudents()) {
+        e.preventDefault();
+        return;
+    }
+});
+
+// Добавление нового поля для студента
+document.getElementById('add-student-btn').addEventListener('click', function() {
+    const container = document.getElementById('students-container');
+    const newRow = document.createElement('div');
+    newRow.className = 'student-row';
+    newRow.style.display = 'flex';
+    newRow.style.gap = '10px';
+    newRow.style.marginTop = '10px';
+    newRow.innerHTML = `
+        <input type="text" name="full_name" class="student-name" placeholder="ФИО студента" style="flex: 1;">
+        <button type="button" class="remove-student-btn" style="width: auto; background: #f44336; padding: 12px 16px;">✖</button>
+    `;
+    container.appendChild(newRow);
+    updateRemoveButtons();
+});
+
+// Удаление поля для студента
+function updateRemoveButtons() {
+    const rows = document.querySelectorAll('.student-row');
+    const removeBtns = document.querySelectorAll('.remove-student-btn');
+    
+    if (rows.length > 1) {
+        removeBtns.forEach(btn => {
+            btn.style.display = 'block';
+        });
+    } else {
+        removeBtns.forEach(btn => {
+            btn.style.display = 'none';
+        });
+    }
+}
+
+// Обработка удаления
+document.getElementById('students-container').addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-student-btn')) {
+        const row = e.target.closest('.student-row');
+        if (row) {
+            row.remove();
+            updateRemoveButtons();
+        }
+    }
+});
+
+// При загрузке страницы настраиваем кнопки
+document.addEventListener('DOMContentLoaded', function() {
+    updateRemoveButtons();
+});
+</script>
+
+<style>
+.student-row {
+    transition: all 0.2s ease;
+}
+.remove-student-btn:hover {
+    background: #d32f2f !important;
+}
+#add-student-btn:hover {
+    background: #1976D2 !important;
+}
+</style>
 
 {% endblock %}

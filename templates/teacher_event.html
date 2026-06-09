@@ -2,6 +2,12 @@
 {% block content %}
 
 <div class="card">
+    {% if is_expired %}
+    <div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 10px; margin-bottom: 20px;">
+        ⚠️ Внимание! Это мероприятие уже прошло ({{ event.start_at[:16]|replace('T', ' ') if event.start_at else 'Не указана' }}). Регистрация закрыта.
+    </div>
+    {% endif %}
+    
     <h2>{{ event.title if event else 'Мероприятие не найдено' }}</h2>
     
     {% if event %}
@@ -9,64 +15,127 @@
         <p><strong>Место:</strong> {{ event.location }}</p>
         <p><strong>Максимум участников:</strong> {{ event.max_participants }}</p>
         <p><strong>Описание:</strong> {{ event.description if event.description else 'Описание отсутствует' }}</p>
+        <p><strong>👥 Обязательных студентов:</strong> {{ mandatory_students|length }}</p>
     {% else %}
         <p style="color: red;">Мероприятие не найдено</p>
     {% endif %}
 </div>
 
 {% if event %}
+<!-- Таблица 1: Обязательные студенты (синхронизированные) -->
 <div class="card">
-    <h3>Статистика</h3>
-    <p>📊 Всего зарегистрировалось: {{ registrations|length }} человек</p>
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0;">📋 Обязательные студенты</h3>
+        <button type="button" onclick="location.href='/teacher/edit-mandatory/{{ event.id }}'" style="background: #2196F3; width: auto; padding: 8px 16px;">✏️ Редактировать список</button>
+    </div>
+    {% if mandatory_students %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Студент</th>
+                        <th>Фото</th>
+                        <th>Пришёл</th>
+                        <th>Время отметки</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in mandatory_students %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 8px;">{{ student.full_name }}</td>
+                        <td style="padding: 8px;">
+                            {% if student.selfie %}
+                                <a href="{{ student.selfie }}" target="_blank">
+                                    <img src="{{ student.selfie }}" class="student-photo" alt="Фото">
+                                </a>
+                            {% else %}
+                                <span class="no-photo">Нет фото</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 8px;">
+                            {% if student.attended %}
+                                <span style="color: green;">✅ Пришёл</span>
+                            {% else %}
+                                <span style="color: orange;">❌ Не пришёл</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 8px;">{{ student.attendance_marked_at[:16]|replace('T', ' ') if student.attendance_marked_at else '—' }}</td>
+                        <td style="padding: 8px;">
+                            {% if not student.attended %}
+                                <button onclick="markMandatoryAttendance('{{ event.id }}', '{{ student.id }}')">📝 Отметить</button>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>Нет обязательных студентов</p>
+    {% endif %}
 </div>
 
+<!-- Таблица 2: Отметившиеся по QR (только НЕ из обязательного списка) -->
 <div class="card">
-    <h3>Зарегистрированные студенты</h3>
-    
+    <h3>📱 Отметившиеся по QR</h3>
     {% if registrations %}
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <th style="text-align: left; padding: 8px;">Студент</th>
-                    <th style="text-align: left; padding: 8px;">Группа</th>
-                    <th style="text-align: left; padding: 8px;">Фото</th>
-                    <th style="text-align: left; padding: 8px;">Время регистрации</th>
-                    <th style="text-align: left; padding: 8px;">Присутствие</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for reg in registrations %}
-                <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 8px;">{{ reg.student_username if reg.student_username else reg.student_name if reg.student_name else 'Неизвестно' }}</td>
-                    <td style="padding: 8px;">{{ reg.student_group if reg.student_group else '—' }}</td>
-                    <td style="padding: 8px;">
-                        {% if reg.selfie %}
-                            <a href="{{ reg.selfie }}" target="_blank">
-                                <img src="{{ reg.selfie }}" alt="Фото" style="width: 50px; height: 50px; object-fit: cover; border-radius: 50%; cursor: pointer;">
-                            </a>
-                        {% else %}
-                            <span style="color: gray;">Нет фото</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 8px;">{{ reg.registered_at[:16]|replace('T', ' ') if reg.registered_at else 'Не указано' }}</td>
-                    <td style="padding: 8px;">
-                        {% if reg.attendance_marked_by_student %}
-                            <span style="color: green;">✅ Отмечен</span>
-                        {% else %}
-                            <span style="color: orange;">⏳ Ожидает отметки</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Студент</th>
+                        <th>Группа</th>
+                        <th>Фото</th>
+                        <th>Время регистрации</th>
+                        <th>Присутствие</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reg in registrations %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 8px;">{{ reg.full_name if reg.full_name else reg.student_username }}</td>
+                        <td style="padding: 8px;">{{ reg.group if reg.group else '—' }}</td>
+                        <td style="padding: 8px;">
+                            {% if reg.selfie %}
+                                <a href="{{ reg.selfie }}" target="_blank">
+                                    <img src="{{ reg.selfie }}" class="student-photo" alt="Фото">
+                                </a>
+                            {% else %}
+                                <span class="no-photo">Нет фото</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 8px;">{{ reg.registered_at[:16]|replace('T', ' ') }}</td>
+                        <td style="padding: 8px;">
+                            {% if reg.attendance_marked_by_student %}
+                                ✅ Отмечен
+                            {% else %}
+                                ⏳ Не отмечен
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     {% else %}
-        <p style="text-align: center; color: #666;">Пока никто не зарегистрировался</p>
+        <p>Нет дополнительных отметившихся по QR</p>
     {% endif %}
+</div>
+
+<!-- Статистика -->
+<div class="card">
+    <h3>📊 Статистика</h3>
+    <p><strong>Обязательные студенты:</strong> {{ mandatory_students|length }}</p>
+    <p><strong>Из них пришли:</strong> {{ mandatory_students|selectattr('attended', 'equalto', true)|list|length }}</p>
+    <p><strong>Дополнительно по QR:</strong> {{ qr_only_registrations|length }}</p>
+    <p><strong>Всего участников:</strong> {{ mandatory_students|selectattr('attended', 'equalto', true)|list|length + qr_only_registrations|length }}</p>
 </div>
 {% endif %}
 
-<div style="display: flex; gap: 10px; margin-top: 20px;">
+<div class="flex-buttons">
     <button type="button" onclick="location.href='/teacher/edit/{{ event.id }}'" style="background: #2196F3;">✏️ Редактировать</button>
     <button type="button" onclick="deleteEvent('{{ event.id }}')" style="background: #f44336;">🗑️ Удалить мероприятие</button>
     <button type="button" onclick="location.href='/teacher/events'">← Назад к списку</button>
@@ -75,27 +144,35 @@
 
 <script>
 function deleteEvent(eventId) {
-    if (confirm('Вы уверены, что хотите удалить это мероприятие? Это действие нельзя отменить.')) {
+    if (confirm('Вы уверены, что хотите удалить это мероприятие?')) {
         fetch('/teacher/delete/' + eventId, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
+            headers: {'Content-Type': 'application/json'}
         })
-        .then(function(response) {
-            return response.json();
-        })
+        .then(function(response) { return response.json(); })
         .then(function(data) {
             if (data.success) {
                 location.href = '/teacher/events';
             } else {
                 alert('Ошибка: ' + data.error);
             }
-        })
-        .catch(function(error) {
-            alert('Ошибка при удалении: ' + error);
         });
     }
+}
+
+function markMandatoryAttendance(eventId, mandatoryId) {
+    fetch('/teacher/mark_mandatory_attendance/' + eventId + '/' + mandatoryId, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    });
 }
 </script>
 

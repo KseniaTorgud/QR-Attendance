@@ -2,8 +2,10 @@
 
 {% if session.role == 'admin' %}
     {% set back_url = '/admin/event/' + event.id|string %}
+    {% set action_url = '/admin/edit/' + event.id|string %}
 {% else %}
     {% set back_url = '/teacher/event/' + event.id|string %}
+    {% set action_url = '/teacher/edit/' + event.id|string %}
 {% endif %}
 
 {% block content %}
@@ -17,7 +19,7 @@
     </div>
     {% endif %}
     
-    <form method="POST" action="/teacher/edit/{{ event.id }}">
+    <form method="POST" action="{{ action_url }}">
         <input type="text" name="title" placeholder="Название" value="{{ event.title }}" required>
         <input type="datetime-local" name="start_at" value="{{ event.start_at[:16] if event.start_at else '' }}" required>
         <input type="datetime-local" name="registration_deadline" value="{{ event.registration_deadline[:16] if event.registration_deadline else '' }}" required>
@@ -34,5 +36,7 @@
         <button type="submit">Сохранить изменения</button>
     </form>
 </div>
+
 <button type="button" onclick="location.href='{{ back_url }}'">← Назад</button>
+
 {% endblock %}

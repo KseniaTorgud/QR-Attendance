@@ -12,21 +12,29 @@
         {{ error }}
     </div>
     {% endif %}
+
     
     {% if already_registered %}
         <p style="color: green;">✅ Вы уже зарегистрированы на это мероприятие!</p>
         <button onclick="location.href='/student/my-registrations'">Мои регистрации</button>
     {% else %}
-        <form method="POST" action="/attend/{{ event.id }}" enctype="multipart/form-data">
-            <input type="text" name="student_name" placeholder="Ваше имя" required>
-            <input type="text" name="student_group" placeholder="Группа" required>
-            <input type="file" name="selfie" accept="image/*" capture="environment">
-            <p style="font-size: 12px; color: #666;">Сделайте селфи на мероприятии (необязательно)</p>
-            <button type="submit">Отметиться</button>
+        <form method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="text" name="student_name" placeholder="Ваше ФИО" required style="padding: 12px;">
+            <input type="text" name="student_group" placeholder="Группа" required style="padding: 12px;">
+            <input type="file" name="selfie" accept="image/*" capture="environment" style="padding: 8px;">
+            <button type="submit" style="margin-top: 5px;">Отметиться</button>
         </form>
     {% endif %}
 </div>
 
 <button onclick="location.href='/'">На главную</button>
-
+<script>
+document.getElementById('selfie')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file && file.size > 5 * 1024 * 1024) { // 5 МБ
+        alert('Файл слишком большой! Максимальный размер 5 МБ');
+        this.value = '';
+    }
+});
+</script>
 {% endblock %}

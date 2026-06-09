@@ -11,6 +11,7 @@
     {% endif %}
     
     <form method="POST" action="/attend_login">
+        <input type="hidden" name="event_id" value="{{ event_id }}">
         <input type="text" name="username" placeholder="Имя пользователя" required>
         <input type="password" name="password" placeholder="Пароль" required>
         <button type="submit">Войти</button>
@@ -19,7 +20,7 @@
     <hr style="margin: 20px 0;">
     
     <p style="text-align: center;">Нет аккаунта?</p>
-    <button onclick="location.href='/student/register'" style="background: #A0B49E;">Зарегистрироваться</button>
+    <button type="button" onclick="location.href='/student/register?redirect=/attend/{{ event_id }}'" style="background: #A0B49E;">Зарегистрироваться</button>
 </div>
 
 {% endblock %}

@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card" style="text-align: center;">
+    <h2>⏰ Мероприятие завершено</h2>
+    <h3>{{ event.title }}</h3>
+    <p><strong>Дата:</strong> {{ event.start_at[:16]|replace('T', ' ') if event.start_at else 'Не указана' }}</p>
+    <p style="color: red;">Регистрация на это мероприятие закрыта, так как оно уже прошло.</p>
+    
+    <button onclick="location.href='/'">На главную</button>
+</div>
+
+{% endblock %}

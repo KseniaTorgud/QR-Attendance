@@ -1,0 +1,92 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="card">
+    <h2>Редактирование обязательных студентов</h2>
+    <h3>{{ event.title }}</h3>
+    
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+    
+    <!-- Форма для массового добавления -->
+    <form method="POST" action="/teacher/edit-mandatory/{{ event.id }}">
+        <div style="margin-top: 20px;">
+            <label style="font-weight: 600;">👥 Обязательные студенты (каждый с новой строки)</label>
+            <textarea name="mandatory_students_lines" rows="10" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #ddd; margin-top: 10px; font-family: monospace;">{{ mandatory_lines }}</textarea>
+            <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                Введите каждого студента с новой строки в формате: <strong>ФИО</strong><br>
+                Например:<br>
+                Иванов Артем Сергеевич<br>
+                Петрова Мария Игоревна
+            </p>
+        </div>
+        
+        <button type="submit">Сохранить изменения</button>
+    </form>
+</div>
+
+<!-- Текущий список с кнопками удаления -->
+<div class="card">
+    <h3>📋 Текущий список обязательных студентов</h3>
+    {% if mandatory_students_list %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Студент</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in mandatory_students_list %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 8px;">{{ loop.index }}</td>
+                        <td style="padding: 8px;">{{ student.full_name }}</td>
+                        <td style="padding: 8px;">
+                            <button type="button" onclick="deleteStudent('{{ event.id }}', '{{ student.id }}', '{{ student.full_name }}')" style="background: #f44336; width: auto; padding: 5px 10px;">🗑️ Удалить</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>Нет обязательных студентов</p>
+    {% endif %}
+</div>
+
+<button type="button" onclick="location.href='/teacher/event/{{ event.id }}'">← Назад к мероприятию</button>
+
+<script>
+function deleteStudent(eventId, mandatoryId, studentName) {
+    if (confirm('Вы уверены, что хотите удалить студента "' + studentName + '" из обязательного списка?')) {
+        fetch('/teacher/delete-mandatory/' + eventId + '/' + mandatoryId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Ошибка: ' + data.error);
+            }
+        })
+        .catch(function(error) {
+            alert('Ошибка при удалении: ' + error);
+        });
+    }
+}
+</script>
+
+{% endblock %}
