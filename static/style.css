@@ -369,3 +369,53 @@ td {
     margin: 10px auto;
     display: block;
 }
+
+/* Валидация */
+input:invalid {
+    border-color: #f44336;
+}
+
+.alert-error {
+    background: #ffebee;
+    color: #c62828;
+    padding: 12px;
+    border-radius: 14px;
+    margin-bottom: 16px;
+}
+
+.alert-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+    padding: 12px;
+    border-radius: 14px;
+    margin-bottom: 16px;
+}
+
+.disabled-btn {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+    .flex-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .flex-buttons button {
+        flex: 1;
+        min-width: calc(50% - 8px);
+        font-size: 12px;
+        padding: 10px;
+    }
+    
+    .card-actions {
+        flex-direction: column;
+    }
+    
+    .card-actions button {
+        width: 100%;
+        margin: 4px 0;
+    }
+}
